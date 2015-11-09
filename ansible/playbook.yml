@@ -1,33 +1,33 @@
 ---
 - hosts: all
   tasks:
-    # version control
-    - apt: name=git
-    - apt: name=mercurial
-    # build tools
-    - apt: name=build-essential
-    - apt: name=autoconf
-    - apt: name=automake
-    - apt: name=cmake
-    - apt: name=pkg-config
-    - apt: name=texinfo
-    - apt: name=yasm
-    # libraries
-    - apt: name=libass-dev
-    - apt: name=libfreetype6-dev
-    - apt: name=libsdl1.2-dev
-    - apt: name=libtheora-dev
-    - apt: name=libtool
-    - apt: name=libva-dev
-    - apt: name=libvdpau-dev
-    - apt: name=libvorbis-dev
-    - apt: name=libxcb1-dev
-    - apt: name=libxcb-shm0-dev
-    - apt: name=libxcb-xfixes0-dev
-    - apt: name=zlib1g-dev
-    - apt: name=libopus-dev
-    - apt: name=libmp3lame-dev
-    - apt: name=libx264-dev
+    - name: install ffmpeg build dependencies
+      apt: name={{ item }}
+      with_items:
+          - git
+          - mercurial
+          - build-essential
+          - autoconf
+          - automake
+          - cmake
+          - pkg-config
+          - texinfo
+          - yasm
+          - libass-dev
+          - libfreetype6-dev
+          - libsdl1.2-dev
+          - libtheora-dev
+          - libtool
+          - libva-dev
+          - libvdpau-dev
+          - libvorbis-dev
+          - libxcb1-dev
+          - libxcb-shm0-dev
+          - libxcb-xfixes0-dev
+          - zlib1g-dev
+          - libopus-dev
+          - libmp3lame-dev
+          - libx264-dev
     # dependent libraries
     # libx265
     - name: clone libx265
@@ -42,14 +42,17 @@
       command: cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLED_SHARED:bool=off ../../source
       args:
           chdir: /usr/src/x265/build/linux
+          creates: /usr/src/x265/build/linux/Makefile
     - name: compile libx265
       command: make -j2
       args:
           chdir: /usr/src/x265/build/linux
+          creates: /usr/src/x265/build/linux/x265
     - name: install libx265
       command: make install
       args:
           chdir: /usr/src/x265/build/linux
+          creates: /usr/local/bin/x265
     # libfdk-aac
     - name: clone libfdk-aac
       command: git clone https://github.com/mstorsjo/fdk-aac.git /usr/src/libfdk-aac
@@ -63,18 +66,22 @@
       command: autoreconf -fiv
       args:
           chdir: /usr/src/libfdk-aac
+          creates: /usr/src/libfdk-aac/configure
     - name: configure libfdk-aac
       command: /usr/src/libfdk-aac/configure --prefix=/usr/local --disable-shared
       args:
           chdir: /usr/src/libfdk-aac
+          creates: /usr/src/libfdk-aac/libtool
     - name: compile libfdk-aac
       command: make -j2
       args:
           chdir: /usr/src/libfdk-aac
+          creates: /usr/src/libfdk-aac/libFDK/src/FDK_core.o
     - name: install libfdk-aac
       command: make install
       args:
           chdir: /usr/src/libfdk-aac
+          creates: /usr/local/lib/libfdk-aac.a
     # libvpx
     - name: download libvpx
       shell: wget -O - https://storage.googleapis.com/downloads.webmproject.org/releases/webm/libvpx-1.4.0.tar.bz2 | tar xjvf -
@@ -96,6 +103,36 @@
       args:
           chdir: /usr/src/libvpx-1.4.0
           creates: /usr/local/lib/libvpx.a
+    # libmfx
+    - name: download libmfx
+      command: git clone https://github.com/lu-zero/mfx_dispatch.git libmfx
+      args:
+          chdir: /usr/src
+          creates: /usr/src/libmfx
+    - name: update libmfx
+      command: git pull origin master
+      args:
+          chdir: /usr/src/libmfx
+    - name: autoreconf libmfx
+      command: autoreconf -i
+      args:
+          chdir: /usr/src/libmfx
+          creates: /usr/src/libmfx/configure
+    - name: configure libmfx
+      command: /usr/src/libmfx/configure
+      args:
+          chdir: /usr/src/libmfx
+          creates: /usr/src/libmfx/Makefile
+    - name: compile libmfx
+      command: make -j2
+      args:
+          chdir: /usr/src/libmfx
+          creates: /usr/src/libmfx/libmfx.la
+    - name: install libmfx
+      command: make install
+      args:
+          chdir: /usr/src/libmfx
+          creates: /usr/local/lib/libmfx.la
     # ffmpeg itself
     - name: download ffmpeg
       command: git clone https://github.com/ffmpeg/ffmpeg.git /usr/src/ffmpeg
@@ -107,14 +144,24 @@
       args:
           chdir: /usr/src/ffmpeg
     - name: configure ffmpeg
-      command: /usr/src/ffmpeg/configure \
-        --prefix=/usr/local \
-        --pkg-config-flags='--static' \
-        --bindir=/usr/local/bin \
-        --enable-gpl --enable-version3 --enable-nonfree \
-        --enable-libass --enable-libfdk-aac --enable-libfreetype --enable-libmp3lame \
-        --enable-libopus --enable-libtheora --enable-libvorbis --enable-libvpx \
-        --enable-libx264 --enable-libx265
+      command: /usr/src/ffmpeg/configure
+        --prefix=/usr/local
+        --pkg-config-flags='--static'
+        --bindir=/usr/local/bin
+        --enable-gpl
+        --enable-version3
+        --enable-nonfree
+        --enable-libass
+        --enable-libfdk-aac
+        --enable-libfreetype
+        --enable-libmp3lame
+        --enable-libopus
+        --enable-libtheora
+        --enable-libvorbis
+        --enable-libvpx
+        --enable-libx264
+        --enable-libx265
+        --enable-libmfx
       args:
           chdir: /usr/src/ffmpeg
     - name: compile ffmpeg
@@ -125,5 +172,8 @@
       command: make install
       args:
           chdir: /usr/src/ffmpeg
-    - name: update ldconfig
-      command: ldconfig
+      notify:
+          - update ldconfig
+  handlers:
+      - name: update ldconfig
+        command: ldconfig
